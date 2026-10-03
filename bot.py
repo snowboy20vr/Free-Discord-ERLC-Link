@@ -351,9 +351,12 @@ class ConfigView(discord.ui.LayoutView):
             controls.add_item(CloseButton())
             self.add_item(controls)
         else:
-            controls = discord.ui.ActionRow()
             if self.page == "detection":
-                controls.add_item(DetectionActionSelect(self))
+                detection_row = discord.ui.ActionRow()
+                detection_row.add_item(DetectionActionSelect(self))
+                self.add_item(detection_row)
+
+            controls = discord.ui.ActionRow()
             controls.add_item(EditButton())
             controls.add_item(CloseButton())
             self.add_item(controls)
