@@ -302,21 +302,54 @@ class ConfigView(discord.ui.LayoutView):
 
     def rebuild(self):
         self.clear_items()
-        pages = [("Overview", "overview"), ("ER:LC", "erlc"), ("Permissions", "permissions"), ("Detection", "detection"), ("Logs", "logs"), ("Misc", "misc")]
-        nav1 = discord.ui.ActionRow()
-        for label, value in pages[:5]:
-            nav1.add_item(PageButton(label, value, self.page == value))
-        nav2 = discord.ui.ActionRow()
-        nav2.add_item(PageButton("Misc", "misc", self.page == "misc"))
-        nav2.add_item(EditButton())
-        nav2.add_item(CloseButton())
-        self.add_item(discord.ui.Container(discord.ui.TextDisplay(self.page_text()), nav1, nav2))
+
+        self.add_item(
+            discord.ui.TextDisplay(
+                "# 🔗 ER:LC Link Control Center\n"
+                f"**{self.author.guild.name}**\n\n"
+                "Configure ER:LC, permissions, anti-cheat detection, logs, "
+                "and the command prefix from one clean panel."
+            )
+        )
+
+        tabs = discord.ui.ActionRow()
+        for label, value, emoji in (
+            ("Overview", "overview", "🏠"),
+            ("ER:LC", "erlc", "🎮"),
+            ("Permissions", "permissions", "🛡️"),
+            ("Detection", "detection", "🔎"),
+            ("Logs", "logs", "📋"),
+        ):
+            tabs.add_item(
+                PageButton(
+                    label,
+                    value,
+                    self.page == value,
+                    emoji,
+                )
+            )
+        self.add_item(tabs)
+
+        misc_row = discord.ui.ActionRow()
+        misc_row.add_item(PageButton("Misc", "misc", self.page == "misc", "⚙️"))
+        self.add_item(misc_row)
+
+        self.add_item(discord.ui.Separator())
+        self.add_item(discord.ui.TextDisplay(self.page_text()))
+
+        controls = discord.ui.ActionRow()
+        if self.page == "detection":
+            controls.add_item(DetectionActionSelect(self))
+        controls.add_item(EditButton())
+        controls.add_item(CloseButton())
+        self.add_item(controls)
 
 
 class PageButton(discord.ui.Button):
-    def __init__(self, label, value, active):
+    def __init__(self, label, value, active, emoji=None):
         super().__init__(
             label=label,
+            emoji=emoji,
             style=(
                 discord.ButtonStyle.primary
                 if active
