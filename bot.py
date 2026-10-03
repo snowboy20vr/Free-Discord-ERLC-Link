@@ -312,138 +312,6 @@ class ConfigView(discord.ui.LayoutView):
         nav2.add_item(CloseButton())
         self.add_item(discord.ui.Container(discord.ui.TextDisplay(self.page_text()), nav1, nav2))
 
-    def embed(self):
-        embed = discord.Embed(
-            title="ER:LC Link • Configuration",
-            color=discord.Color.blurple(),
-        )
-
-        embed.set_footer(text="Changes are saved immediately.")
-
-        if self.page == "overview":
-            embed.description = (
-                "Configure your ER:LC connection, command access, "
-                "anti-cheat detector, logs and prefix."
-            )
-
-        elif self.page == "erlc":
-            embed.add_field(
-                name="Server Key",
-                value=(
-                    "Configured"
-                    if self.cfg.erlc_server_key
-                    else "Not configured"
-                ),
-                inline=False,
-            )
-            embed.add_field(
-                name="API",
-                value=ERLC_BASE,
-                inline=False,
-            )
-
-        elif self.page == "permissions":
-            embed.add_field(
-                name="Command Role",
-                value=(
-                    f"<@&{self.cfg.command_role_id}>"
-                    if self.cfg.command_role_id
-                    else "Not configured"
-                ),
-            )
-            embed.add_field(
-                name="Admin Role",
-                value=(
-                    f"<@&{self.cfg.admin_role_id}>"
-                    if self.cfg.admin_role_id
-                    else "Administrator only"
-                ),
-            )
-            embed.description = (
-                "Discord Administrators always have access. "
-                "The configured command role can run ER:LC commands."
-            )
-
-        elif self.page == "detection":
-            embed.add_field(
-                name="Enabled",
-                value="Yes" if self.cfg.detection_enabled else "No",
-            )
-            embed.add_field(
-                name="Distance",
-                value=f"{self.cfg.detection_distance:.0f} studs",
-            )
-            embed.add_field(
-                name="Kills",
-                value=str(self.cfg.detection_kills),
-            )
-            embed.add_field(
-                name="Window",
-                value=f"{self.cfg.detection_window:g}s",
-            )
-            embed.add_field(
-                name="Action",
-                value=self.cfg.detection_action.upper(),
-            )
-            embed.add_field(
-                name="Cooldown",
-                value=f"{self.cfg.detection_cooldown:g}s",
-            )
-
-            embed.description = (
-                "The detector observes kill logs and compares the "
-                "latest available live positions."
-            )
-
-        elif self.page == "logs":
-            embed.add_field(
-                name="Discord Log Channel",
-                value=(
-                    f"<#{self.cfg.log_channel_id}>"
-                    if self.cfg.log_channel_id
-                    else "Not configured"
-                ),
-            )
-            embed.add_field(
-                name="Melonly API Token",
-                value=(
-                    "Configured"
-                    if self.cfg.melonly_api_token
-                    else "Not configured"
-                ),
-            )
-            embed.add_field(
-                name="Melonly Webhook",
-                value=(
-                    "Configured"
-                    if self.cfg.melonly_webhook_url
-                    else "Not configured"
-                ),
-            )
-
-        elif self.page == "misc":
-            embed.add_field(
-                name="Prefix",
-                value=self.cfg.prefix,
-            )
-            embed.add_field(
-                name="Examples",
-                value=(
-                    f"{self.cfg.prefix}command hint Welcome!\\n"
-                    f"{self.cfg.prefix}command kick Player Reason\\n"
-                    f"{self.cfg.prefix}command ban Player Reason\\n"
-                    f"{self.cfg.prefix}command unban Player"
-                ),
-                inline=False,
-            )
-            embed.add_field(
-                name="Aliases",
-                value=f"{self.cfg.prefix}command or {self.cfg.prefix}cmd",
-                inline=False,
-            )
-
-        return embed
-
 
 class PageButton(discord.ui.Button):
     def __init__(self, label, value, active):
@@ -465,10 +333,48 @@ class PageButton(discord.ui.Button):
         view.page = self.value
         view.rebuild()
 
-        await interaction.response.edit_message(
-            embed=view.embed(),
-            view=view,
+        await interaction.response.edit_message(view=view)
+
+
+class DetectionActionSelect(discord.ui.Select):
+    def __init__(self, view: ConfigView):
+        self.parent_view = view
+        options = [
+            discord.SelectOption(
+                label="Log",
+                description="Detect and log only",
+                value="log",
+                emoji="📋",
+                default=view.cfg.detection_action == "log",
+            ),
+            discord.SelectOption(
+                label="Log Kick",
+                description="Detect, log, then kick",
+                value="log kick",
+                emoji="👢",
+                default=view.cfg.detection_action == "log kick",
+            ),
+            discord.SelectOption(
+                label="Log Ban",
+                description="Detect, log, then ban",
+                value="log ban",
+                emoji="🔨",
+                default=view.cfg.detection_action == "log ban",
+            ),
+        ]
+        super().__init__(
+            placeholder="Choose anti-cheat action",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id="erlc_detection_action",
         )
+
+    async def callback(self, interaction: discord.Interaction):
+        self.parent_view.cfg.detection_action = self.values[0]
+        await save_config(self.parent_view.cfg)
+        self.parent_view.rebuild()
+        await interaction.response.edit_message(view=self.parent_view)
 
 
 class EditButton(discord.ui.Button):
@@ -481,11 +387,13 @@ class EditButton(discord.ui.Button):
 
     async def callback(self, interaction):
         view: ConfigView = self.view
-        modal = ConfigModal(
-            view.cfg,
-            view.page,
-        )
+        if view.page == "overview":
+            view.page = "erlc"
+            view.rebuild()
+            await interaction.response.edit_message(view=view)
+            return
 
+        modal = ConfigModal(view.cfg, view.page, view)
         await interaction.response.send_modal(modal)
 
 
@@ -502,11 +410,13 @@ class CloseButton(discord.ui.Button):
 
 
 class ConfigModal(discord.ui.Modal):
-    def __init__(self, cfg: GuildConfig, page: str):
+    def __init__(self, cfg: GuildConfig, page: str, parent_view: ConfigView):
+
         super().__init__(title=f"Edit {page.title()}")
 
         self.cfg = cfg
         self.page = page
+        self.parent_view = parent_view
 
         if page == "erlc":
             self.key = discord.ui.TextInput(
@@ -549,17 +459,11 @@ class ConfigModal(discord.ui.Modal):
                 label="Window in seconds",
                 default=str(cfg.detection_window),
             )
-            self.action = discord.ui.TextInput(
-                label="Action log, kick, or ban",
-                default=cfg.detection_action,
-            )
-
             for item in (
                 self.enabled,
                 self.distance_input,
                 self.kills,
                 self.window,
-                self.action,
             ):
                 self.add_item(item)
 
@@ -630,15 +534,6 @@ class ConfigModal(discord.ui.Modal):
                     float(self.window.value),
                 )
 
-                action = self.action.value.strip().lower()
-
-                if action not in {"log", "log kick", "log ban"}:
-                    raise ValueError(
-                        "Action must be log, log kick, or log ban."
-                    )
-
-                self.cfg.detection_action = action
-
             elif self.page == "logs":
                 self.cfg.log_channel_id = (
                     int(self.channel.value)
@@ -662,10 +557,8 @@ class ConfigModal(discord.ui.Modal):
 
             await save_config(self.cfg)
 
-            await interaction.response.send_message(
-                "Configuration saved.",
-                ephemeral=True,
-            )
+            self.parent_view.rebuild()
+            await interaction.response.edit_message(view=self.parent_view)
 
         except ValueError as exc:
             await interaction.response.send_message(
@@ -1069,39 +962,6 @@ async def process_prefix(message):
             f"Command failed: {exc}",
             delete_after=7,
         )
-
-
-@bot.event
-async def on_ready():
-    if getattr(bot, "_commands_synced", False):
-        return
-
-    bot._commands_synced = True
-
-    for guild in bot.guilds:
-        try:
-            bot.tree.copy_global_to(guild=guild)
-            await bot.tree.sync(guild=guild)
-            log.info(
-                "Synced slash commands to %s (%s)",
-                guild.name,
-                guild.id,
-            )
-        except discord.Forbidden:
-            log.error(
-                "Cannot sync slash commands to %s (%s): Missing Access.",
-                guild.name,
-                guild.id,
-            )
-        except discord.HTTPException as exc:
-            log.error(
-                "Slash-command sync failed for %s (%s): %s",
-                guild.name,
-                guild.id,
-                exc,
-            )
-
-    log.info("Logged in as %s (%s)", bot.user, bot.user.id if bot.user else "unknown")
 
 
 @bot.event
