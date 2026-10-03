@@ -93,3 +93,16 @@ Put the private server key into /config -> ER:LC. Never commit the key to GitHub
 ## Security
 
 Never commit .env, database files, Discord tokens, ER:LC keys, or Melonly tokens.
+
+
+## Server ID
+
+The optional `SERVER_ID` setting is your Discord server ID. It is used to sync slash commands to one server for faster testing. Leave it blank if you want global slash-command sync.
+
+Example:
+
+```env
+SERVER_ID=123456789012345678
+```
+
+To copy it in Discord, enable **Developer Mode**, right-click your server, and choose **Copy Server ID**.
