@@ -701,7 +701,7 @@ class ERLCBot(commands.Bot):
 
         self.detection_loop.start()
 
-        dev_guild = os.getenv("DEV_GUILD_ID")
+        dev_guild = os.getenv("SERVER_ID")
 
         if dev_guild:
             await self.tree.sync(
