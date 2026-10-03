@@ -1,108 +1,230 @@
-# ERLC Link
+# ER:LC Link
 
-A clean Discord to ER:LC private-server management bot built with Python and discord.py.
+A clean Discord-to-ER:LC private-server management bot built with Python, discord.py, SQLite and Discord Components V2.
 
 ## Features
 
-- /config private button-based configuration panel
-- Per-server ER:LC API key
-- Role-based command access plus Administrator
-- /server, /players, /command, /hint, /message, /kick, /ban, /unban
-- Configurable prefix command router
-- Example: !command hint Welcome to the server!
-- Prefix trigger messages are deleted after a successful command when Manage Messages is available
-- Discord action logs
-- Optional Melonly webhook forwarding
-- Configurable high-distance/high-kill detection
-- Detection can log, kick, or ban
+- **Components V2 /config Control Center**
+- Same-message tab switching
+- Current tab button is disabled
+- Private/ephemeral configuration panel
+- ER:LC server-key configuration
+- Command-role and admin-role configuration
+- Configurable prefix
+- Prefix-only ER:LC action router
+- `command` and `cmd` aliases
+- `hint` / `message` convenience aliases
+- `/server`, `/players`, `/help`
+- High-distance/high-kill anti-cheat detection
+- Detection actions: **Log**, **Log Kick**, **Log Ban**
+- Discord logging
+- Optional Melonly webhook logging
+- Melonly receives **only actual bot kick/ban events**
 - SQLite configuration storage
-- Secrets excluded from Git
+- Docker/Procfile deployment support
 
-## Extra quality-of-life features
+## /config
 
-- One private `/config` panel with ER:LC, permissions, detection, logs, and misc settings.
-- Configurable command/admin roles.
-- Discord audit logging for ER:LC actions.
-- Optional Melonly webhook forwarding.
-- Prefix trigger messages are automatically deleted after successful commands when the bot has permission.
-- Common ER:LC command aliases such as `hint` → `h` and `message` → `m`.
-- `cmd` works as a shorter alias for the configured prefix command.
+Open:
 
-## Detection
+`/config`
 
-Default detector:
+The panel has:
 
-- enabled
-- 250 studs minimum live distance
-- 5 kills
-- 5-second window
-- action: log
-- 60-second per-player cooldown
+### Overview
+Shows the current configuration at a glance.
 
-The detector polls ER:LC kill logs and current player positions. Kill logs identify the killer, victim and timestamp, while live player data can provide current location. The API does not provide a historical kill coordinate in the kill-log entry, so the detector intentionally uses the latest available live positions instead of pretending the distance is exact.
+### ER:LC
+Configure the private ER:LC server key.
 
-Start with log mode, tune the thresholds, and only then enable enforcement.
+### Permissions
+- ER:LC command role
+- Admin/config role
+- Discord Administrators always have access
 
-## Prefix
+### Detection
+Configure:
 
-Default prefix is !.
+- Enabled
+- Distance in studs
+- Kill threshold
+- Detection window
+- Cooldown
+- Action
+
+The action selector contains exactly:
+
+- **Log** — detect and log only
+- **Log Kick** — detect, log, then kick
+- **Log Ban** — detect, log, then ban
+
+### Logs
+Configure:
+
+- Discord log channel
+- Melonly API token
+- Melonly incoming webhook
+
+Melonly logging is intentionally limited to kick and ban events actually issued by this bot.
+
+### Misc
+Configure the prefix.
+
+## Prefix commands
+
+ER:LC actions are intentionally prefix-only.
+
+Default prefix:
+
+`!`
 
 Examples:
 
-    !command hint Welcome everyone!
-    !command m Server restart in 10 minutes!
+```
+!command hint Welcome everyone!
+!command message Server restart soon!
+!command kick Player Reason
+!command ban Player Reason
+!command unban Player
+!command <raw ERLC command> <arguments>
+```
 
-The prefix is configured from /config -> Misc.
+Short alias:
 
-## Melonly
+```
+!cmd kick Player Reason
+```
 
-The public Melonly Python client documents API authentication and log read endpoints. This bot does not guess at an undocumented log-write API. Instead, the config supports a Melonly-provided incoming webhook URL for moderation and detection events.
+The prefix trigger is deleted after a successful command when the bot has **Manage Messages** permission.
 
-## Setup
+For prefix **kick** and **ban**:
 
-1. Install Python 3.11 or newer.
-2. Copy .env.example to .env.
-3. Put your Discord bot token in DISCORD_TOKEN.
-4. Run: pip install -r requirements.txt
-5. Run: python bot.py
+- The reason sent to the logger is the staff-entered reason.
+- The log description identifies who ran the command.
+- Melonly receives the kick/ban event only after the ER:LC command succeeds.
 
-## Discord permissions
+Normal ER:LC commands such as hint, message, unban, team, tp, etc. are not sent to Melonly.
 
-View Channels, Send Messages, Embed Links, Read Message History, and Manage Messages.
-
-Enable Message Content Intent and Server Members Intent in the Discord Developer Portal.
-
-## ER:LC API
-
-Put the private server key into /config -> ER:LC. Never commit the key to GitHub.
-
-## Commands
+## Slash commands
 
 | Command | Purpose |
 |---|---|
-| /config | Configure the bot |
-| /server | Server information |
-| /players | Current players |
-| /command | Execute an ER:LC command |
-| /hint | Send :h |
-| /message | Send :m |
-| /kick | Kick a player |
-| /ban | Ban a player |
-| /unban | Unban a player |
+| `/config` | Open the Components V2 configuration center |
+| `/server` | Show ER:LC server information |
+| `/players` | Show current ER:LC players |
+| `/help` | Show the command guide |
 
-## Security
+## Anti-cheat
 
-Never commit .env, database files, Discord tokens, ER:LC keys, or Melonly tokens.
+The detector polls ER:LC kill logs and current player positions.
 
+Default values:
 
-## Server ID
+- Enabled: Yes
+- Distance: 250 studs
+- Kills: 5
+- Window: 5 seconds
+- Action: Log
+- Cooldown: 60 seconds
 
-The optional `SERVER_ID` setting is your Discord server ID. It is used to sync slash commands to one server for faster testing. Leave it blank if you want global slash-command sync.
+The detector uses the latest available live player positions. ER:LC kill-log entries do not provide a historical kill coordinate, so the detector does not claim that the live distance is an exact historical distance.
+
+Start with **Log**, tune the thresholds, then enable enforcement.
+
+## Melonly
+
+This project supports a configurable Melonly incoming webhook.
+
+The bot does **not** send every ER:LC command to Melonly.
+
+Melonly events are limited to:
+
+- Bot-issued kick
+- Bot-issued ban
+
+A prefix kick/ban identifies the Discord staff member who ran it.
+
+An automatic detection kick/ban identifies **ER:LC Link Anti-Cheat** as the executor and includes the detection reason.
+
+## Setup
+
+1. Install Python 3.12 or newer.
+2. Copy `.env.example` to `.env`.
+3. Put your Discord bot token in `DISCORD_TOKEN`.
+4. Optionally put your Discord server ID in `SERVER_ID`.
+5. Install dependencies:
+
+```
+pip install -r requirements.txt
+```
+
+6. Start the bot:
+
+```
+python bot.py
+```
+
+## .env
 
 Example:
 
 ```env
-SERVER_ID=123456789012345678
+DISCORD_TOKEN=YOUR_DISCORD_BOT_TOKEN
+SERVER_ID=1556036425831419904
+DATABASE_PATH=data/erlc_link.db
 ```
 
-To copy it in Discord, enable **Developer Mode**, right-click your server, and choose **Copy Server ID**.
+`SERVER_ID` is the **Discord server ID**, not the ER:LC server key.
+
+If `SERVER_ID` is set and the bot is in that server, slash commands are synced there for fast testing. If it is missing or the bot is not in that server, the bot syncs to its connected Discord servers instead.
+
+Never put the ER:LC server key, Discord token, or Melonly credentials in GitHub.
+
+## Discord permissions
+
+Recommended bot permissions:
+
+- View Channels
+- Send Messages
+- Embed Links
+- Read Message History
+- Manage Messages
+
+The bot also needs the appropriate ER:LC permissions through its configured ER:LC private server/API setup.
+
+In the Discord Developer Portal, enable:
+
+- Message Content Intent
+- Server Members Intent
+
+## Deployment
+
+### Local
+
+```
+python bot.py
+```
+
+### Docker
+
+```
+docker build -t erlc-link .
+docker run --env-file .env erlc-link
+```
+
+### Procfile
+
+```
+worker: python bot.py
+```
+
+## Security
+
+Never commit:
+
+- `.env`
+- Discord bot tokens
+- ER:LC server keys
+- Melonly tokens
+- Database files
+
