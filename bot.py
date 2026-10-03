@@ -259,7 +259,7 @@ def distance(a, b):
     )
 
 
-class ConfigView(discord.ui.View):
+class ConfigView(discord.ui.LayoutView):
     def __init__(self, bot, cfg: GuildConfig, owner_id: int):
         super().__init__(timeout=300)
 
@@ -278,29 +278,39 @@ class ConfigView(discord.ui.View):
 
         return True
 
+    def page_text(self):
+        if self.page == "overview":
+            return "## ER:LC Link Configuration\nUse the buttons below to configure your ER:LC connection, permissions, anti-cheat detection, logging, and prefix."
+        if self.page == "erlc":
+            return f"## ER:LC\n**Server Key:** {'Configured' if self.cfg.erlc_server_key else 'Not configured'}\n**API:** {ERLC_BASE}"
+        if self.page == "permissions":
+            command_role = f"<@&{self.cfg.command_role_id}>" if self.cfg.command_role_id else "Not configured"
+            admin_role = f"<@&{self.cfg.admin_role_id}>" if self.cfg.admin_role_id else "Administrator only"
+            return f"## Permissions\n**Command Role:** {command_role}\n**Admin Role:** {admin_role}\n\nDiscord Administrators always have access. The configured command role can run ER:LC commands."
+        if self.page == "detection":
+            return (f"## Anti-Cheat Detection\n**Enabled:** {'Yes' if self.cfg.detection_enabled else 'No'}\n"
+                    f"**Distance:** {self.cfg.detection_distance:.0f} studs\n**Kills:** {self.cfg.detection_kills}\n"
+                    f"**Window:** {self.cfg.detection_window:g}s\n**Action:** {self.cfg.detection_action.upper()}\n"
+                    f"**Cooldown:** {self.cfg.detection_cooldown:g}s")
+        if self.page == "logs":
+            return (f"## Logs\n**Discord Log Channel:** {f"<#{self.cfg.log_channel_id}>" if self.cfg.log_channel_id else "Not configured"}\n"
+                    f"**Melonly API Token:** {'Configured' if self.cfg.melonly_api_token else 'Not configured'}\n"
+                    f"**Melonly Webhook:** {'Configured' if self.cfg.melonly_webhook_url else 'Not configured'}")
+        return (f"## Miscellaneous\n**Prefix:** `{self.cfg.prefix}`\n**Aliases:** `{self.cfg.prefix}command` or `{self.cfg.prefix}cmd`\n\n"
+                f"**Examples**\n`{self.cfg.prefix}command hint Welcome!`\n`{self.cfg.prefix}command kick Player Reason`\n"
+                f"`{self.cfg.prefix}command ban Player Reason`\n`{self.cfg.prefix}command unban Player`")
+
     def rebuild(self):
         self.clear_items()
-
-        pages = [
-            ("Overview", "overview"),
-            ("ER:LC", "erlc"),
-            ("Permissions", "permissions"),
-            ("Detection", "detection"),
-            ("Logs", "logs"),
-            ("Misc", "misc"),
-        ]
-
-        for label, value in pages:
-            self.add_item(
-                PageButton(
-                    label,
-                    value,
-                    self.page == value,
-                )
-            )
-
-        self.add_item(EditButton())
-        self.add_item(CloseButton())
+        pages = [("Overview", "overview"), ("ER:LC", "erlc"), ("Permissions", "permissions"), ("Detection", "detection"), ("Logs", "logs"), ("Misc", "misc")]
+        nav1 = discord.ui.ActionRow()
+        for label, value in pages[:5]:
+            nav1.add_item(PageButton(label, value, self.page == value))
+        nav2 = discord.ui.ActionRow()
+        nav2.add_item(PageButton("Misc", "misc", self.page == "misc"))
+        nav2.add_item(EditButton())
+        nav2.add_item(CloseButton())
+        self.add_item(discord.ui.Container(discord.ui.TextDisplay(self.page_text()), nav1, nav2))
 
     def embed(self):
         embed = discord.Embed(
@@ -837,7 +847,6 @@ async def config_command(interaction):
     view.rebuild()
 
     await interaction.response.send_message(
-        embed=view.embed(),
         view=view,
         ephemeral=True,
     )
