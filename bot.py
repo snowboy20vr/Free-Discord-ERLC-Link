@@ -714,13 +714,23 @@ class ERLCBot(commands.Bot):
                     "or left blank to use global slash-command sync."
                 )
 
-            await self.tree.sync(
-                guild=discord.Object(id=guild_id)
-            )
-            log.info(
-                "Synced slash commands to server %s",
-                server_id,
-            )
+            try:
+                await self.tree.sync(
+                    guild=discord.Object(id=guild_id)
+                )
+                log.info(
+                    "Synced slash commands to server %s",
+                    server_id,
+                )
+            except discord.Forbidden:
+                log.error(
+                    "Cannot access SERVER_ID %s. Make sure the bot is in "
+                    "that Discord server and SERVER_ID is correct. "
+                    "Continuing with global slash-command sync.",
+                    server_id,
+                )
+                await self.tree.sync()
+                log.info("Synced slash commands globally")
         else:
             await self.tree.sync()
             log.info("Synced global slash commands")
