@@ -498,11 +498,7 @@ class CloseButton(discord.ui.Button):
         )
 
     async def callback(self, interaction):
-        await interaction.response.edit_message(
-            content="Configuration panel closed.",
-            embed=None,
-            view=None,
-        )
+        await interaction.response.edit_message(view=None)
 
 
 class ConfigModal(discord.ui.Modal):
