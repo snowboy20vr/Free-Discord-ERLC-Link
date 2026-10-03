@@ -1318,15 +1318,16 @@ async def on_ready():
                 if target:
                     targets = [target]
                 else:
-                    log.warning(
+                    log.error(
                         "SERVER_ID %s is not a server the bot is currently in. "
-                        "Using connected servers instead.",
+                        "Slash commands were not synced.",
                         target_id,
                     )
-
-        if not targets:
+        else:
             targets = list(bot.guilds)
 
+        # Register the commands only on the intended guild(s).
+        # We intentionally do not leave a global copy behind.
         for guild in targets:
             try:
                 bot.tree.copy_global_to(guild=guild)
@@ -1349,6 +1350,18 @@ async def on_ready():
                     guild.name,
                     guild.id,
                 )
+
+        # The commands above are copied to the guild(s). Now remove any
+        # previously-created global commands so Discord cannot show duplicates.
+        try:
+            bot.tree.clear_commands(guild=None)
+            cleared = await bot.tree.sync()
+            log.info(
+                "Cleared %s old global slash commands.",
+                len(cleared),
+            )
+        except discord.HTTPException:
+            log.exception("Failed to clear old global slash commands.")
 
         bot._commands_synced = True
 
