@@ -701,15 +701,25 @@ class ERLCBot(commands.Bot):
 
         self.detection_loop.start()
 
-        dev_guild = os.getenv("SERVER_ID")
+        server_id = os.getenv("SERVER_ID", "").strip()
 
-        if dev_guild:
+        if server_id:
+            try:
+                guild_id = int(server_id)
+                if guild_id <= 0:
+                    raise ValueError
+            except ValueError:
+                raise RuntimeError(
+                    "SERVER_ID must be a valid Discord server ID, "
+                    "or left blank to use global slash-command sync."
+                )
+
             await self.tree.sync(
-                guild=discord.Object(id=int(dev_guild))
+                guild=discord.Object(id=guild_id)
             )
             log.info(
-                "Synced slash commands to development guild %s",
-                dev_guild,
+                "Synced slash commands to server %s",
+                server_id,
             )
         else:
             await self.tree.sync()
@@ -785,12 +795,17 @@ bot = ERLCBot()
 
 def require_manage():
     async def predicate(interaction):
-        cfg = await get_config(interaction.guild.id)
+        if interaction.guild is None:
+            raise app_commands.CheckFailure(
+                "This command can only be used in a server."
+            )
 
         if not isinstance(interaction.user, discord.Member):
             raise app_commands.CheckFailure(
                 "This command can only be used in a server."
             )
+
+        cfg = await get_config(interaction.guild.id)
 
         if not Permission.can_manage(interaction.user, cfg):
             raise app_commands.CheckFailure(
@@ -804,12 +819,17 @@ def require_manage():
 
 def require_config():
     async def predicate(interaction):
-        cfg = await get_config(interaction.guild.id)
+        if interaction.guild is None:
+            raise app_commands.CheckFailure(
+                "This command can only be used in a server."
+            )
 
         if not isinstance(interaction.user, discord.Member):
             raise app_commands.CheckFailure(
                 "This command can only be used in a server."
             )
+
+        cfg = await get_config(interaction.guild.id)
 
         if not Permission.can_config(interaction.user, cfg):
             raise app_commands.CheckFailure(
@@ -849,6 +869,13 @@ async def config_command(interaction):
     description="Show ER:LC Link commands and examples.",
 )
 async def help_command(interaction):
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "This command can only be used in a server.",
+            ephemeral=True,
+        )
+        return
+
     cfg = await get_config(interaction.guild.id)
     embed = discord.Embed(
         title="ER:LC Link • Command Guide",
