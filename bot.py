@@ -703,37 +703,64 @@ class ERLCBot(commands.Bot):
 
         server_id = os.getenv("SERVER_ID", "").strip()
 
+        target_guilds = []
+
         if server_id:
             try:
-                guild_id = int(server_id)
-                if guild_id <= 0:
+                configured_id = int(server_id)
+                if configured_id <= 0:
                     raise ValueError
             except ValueError:
                 raise RuntimeError(
                     "SERVER_ID must be a valid Discord server ID, "
-                    "or left blank to use global slash-command sync."
+                    "or left blank to sync every server the bot is in."
                 )
 
-            try:
-                await self.tree.sync(
-                    guild=discord.Object(id=guild_id)
-                )
-                log.info(
-                    "Synced slash commands to server %s",
+            configured_guild = self.get_guild(configured_id)
+
+            if configured_guild is not None:
+                target_guilds.append(configured_guild)
+            else:
+                log.warning(
+                    "SERVER_ID %s is not a server the bot is currently in. "
+                    "Ignoring SERVER_ID and syncing commands to connected "
+                    "servers instead.",
                     server_id,
                 )
-            except discord.Forbidden:
-                log.error(
-                    "Cannot access SERVER_ID %s. Make sure the bot is in "
-                    "that Discord server and SERVER_ID is correct. "
-                    "Continuing with global slash-command sync.",
-                    server_id,
-                )
-                await self.tree.sync()
-                log.info("Synced slash commands globally")
+
+        if not target_guilds:
+            target_guilds = list(self.guilds)
+
+        if target_guilds:
+            for guild in target_guilds:
+                try:
+                    self.tree.copy_global_to(guild=guild)
+                    await self.tree.sync(guild=guild)
+                    log.info(
+                        "Synced slash commands to %s (%s)",
+                        guild.name,
+                        guild.id,
+                    )
+                except discord.Forbidden:
+                    log.error(
+                        "Discord denied slash-command sync for %s (%s). "
+                        "Make sure the bot is installed in that server.",
+                        guild.name,
+                        guild.id,
+                    )
+                except discord.HTTPException as exc:
+                    log.error(
+                        "Slash-command sync failed for %s (%s): %s",
+                        guild.name,
+                        guild.id,
+                        exc,
+                    )
         else:
             await self.tree.sync()
-            log.info("Synced global slash commands")
+            log.info(
+                "The bot is not connected to a guild yet; "
+                "synced commands globally."
+            )
 
     async def close(self):
         detection_loop.cancel()
