@@ -306,7 +306,7 @@ class ConfigView(discord.ui.LayoutView):
         self.add_item(
             discord.ui.TextDisplay(
                 "# 🔗 ER:LC Link Control Center\n"
-                f"**{self.author.guild.name}**\n\n"
+                f"**{self.guild_name}**\n\n"
                 "Configure ER:LC, permissions, anti-cheat detection, logs, "
                 "and the command prefix from one clean panel."
             )
