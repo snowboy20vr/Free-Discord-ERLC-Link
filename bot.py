@@ -260,12 +260,13 @@ def distance(a, b):
 
 
 class ConfigView(discord.ui.LayoutView):
-    def __init__(self, bot, cfg: GuildConfig, owner_id: int):
+    def __init__(self, bot, cfg: GuildConfig, owner_id: int, guild_name: str):
         super().__init__(timeout=300)
 
         self.bot = bot
         self.cfg = cfg
         self.owner_id = owner_id
+        self.guild_name = guild_name
         self.page = "overview"
 
     async def interaction_check(self, interaction):
@@ -799,6 +800,7 @@ async def config_command(interaction):
         bot,
         cfg,
         interaction.user.id,
+        interaction.guild.name,
     )
 
     view.rebuild()
