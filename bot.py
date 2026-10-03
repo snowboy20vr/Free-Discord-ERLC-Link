@@ -617,6 +617,7 @@ class ERLCBot(commands.Bot):
         self.kill_seen = set()
         self.kill_times = defaultdict(deque)
         self.detection_cooldowns = {}
+        self._commands_synced = False
 
     async def dynamic_prefix(self, bot, message):
         if not message.guild:
@@ -637,9 +638,10 @@ class ERLCBot(commands.Bot):
         # has populated the bot's guild cache.
 
     async def close(self):
-        detection_loop.cancel()
+        if detection_loop.is_running():
+            detection_loop.cancel()
 
-        if self.http_session:
+        if self.http_session and not self.http_session.closed:
             await self.http_session.close()
 
         await super().close()
@@ -688,14 +690,47 @@ class ERLCBot(commands.Bot):
                         guild.id,
                     )
 
+        # Melonly is handled only by log_punishment().
+
+
+    async def log_punishment(
+        self,
+        cfg,
+        guild,
+        action,
+        player,
+        reason,
+        executed_by,
+        source,
+    ):
+        """Log an actual bot kick/ban to Discord and Melonly."""
+        description = (
+            f"Player: {player}\\n"
+            f"Reason: {reason}\\n"
+            f"Executed by: {executed_by}\\n"
+            f"Source: {source}"
+        )
+
+        await self.log_action(
+            cfg,
+            guild,
+            f"ER:LC {action.title()}",
+            description,
+            discord.Color.red(),
+        )
+
         if self.melonly:
             await self.melonly.send(
                 cfg,
                 {
                     "source": "ERLC Link",
                     "guildId": guild.id,
-                    "type": title.lower().replace(" ", "_"),
-                    "text": description,
+                    "type": action,
+                    "action": action,
+                    "player": player,
+                    "reason": reason,
+                    "description": f"Executed by: {executed_by}",
+                    "sourceType": source,
                     "timestamp": int(time.time()),
                 },
             )
@@ -945,6 +980,7 @@ async def process_prefix(message):
         return
 
     erlc_command = parts.pop(0).lower()
+    punishment_type = erlc_command if erlc_command in {"kick", "ban"} else None
 
     aliases = {
         "hint": "h",
@@ -980,15 +1016,20 @@ async def process_prefix(message):
         except (discord.Forbidden, discord.NotFound):
             pass
 
-        await bot.log_action(
-            cfg,
-            message.guild,
-            "ER:LC Prefix Command",
-            (
-                f"Staff: {message.author.mention}\\n"
-                f"Command: {full_command}"
-            ),
-        )
+        if punishment_type:
+            split_args = rest.split(maxsplit=1)
+            player = split_args[0] if split_args else "Unknown"
+            reason = split_args[1] if len(split_args) > 1 else "No reason provided"
+
+            await bot.log_punishment(
+                cfg,
+                message.guild,
+                punishment_type,
+                player,
+                reason,
+                f"{message.author} ({message.author.id})",
+                "Prefix command",
+            )
 
     except Exception as exc:
         await message.reply(
@@ -1199,9 +1240,19 @@ async def detection_loop():
 
                     try:
                         await client.command(punishment)
+                        await bot.log_punishment(
+                            cfg,
+                            guild,
+                            punishment_action,
+                            killer_name,
+                            reason,
+                            "ER:LC Link Anti-Cheat",
+                            "Automatic cheater detection",
+                        )
                     except Exception:
                         log.exception(
-                            "Automatic punishment failed for %s",
+                            "Automatic %s failed for %s",
+                            punishment_action,
                             killer_name,
                         )
 
@@ -1219,10 +1270,70 @@ async def before_detection():
 
 @bot.event
 async def on_ready():
+    if not getattr(bot, "_commands_synced", False):
+        target_raw = os.getenv("SERVER_ID", "").strip()
+        targets = []
+
+        if target_raw:
+            try:
+                target_id = int(target_raw)
+                if target_id <= 0:
+                    raise ValueError
+            except ValueError:
+                log.error("SERVER_ID must be a positive Discord server ID.")
+                target_id = 0
+
+            if target_id:
+                target = bot.get_guild(target_id)
+                if target:
+                    targets = [target]
+                else:
+                    log.warning(
+                        "SERVER_ID %s is not a server the bot is currently in. "
+                        "Using connected servers instead.",
+                        target_id,
+                    )
+
+        if not targets:
+            targets = list(bot.guilds)
+
+        for guild in targets:
+            try:
+                bot.tree.copy_global_to(guild=guild)
+                synced = await bot.tree.sync(guild=guild)
+                log.info(
+                    "Synced %s slash commands to %s (%s)",
+                    len(synced),
+                    guild.name,
+                    guild.id,
+                )
+            except discord.Forbidden:
+                log.error(
+                    "Cannot sync slash commands to %s (%s): Missing Access.",
+                    guild.name,
+                    guild.id,
+                )
+            except discord.HTTPException:
+                log.exception(
+                    "Slash-command sync failed for %s (%s)",
+                    guild.name,
+                    guild.id,
+                )
+
+        bot._commands_synced = True
+
+    await bot.change_presence(
+        status=discord.Status.online,
+        activity=discord.Activity(
+            type=discord.ActivityType.watching,
+            name=f"ER:LC Link • {len(bot.guilds)} server{'s' if len(bot.guilds) != 1 else ''}",
+        ),
+    )
+
     log.info(
         "Logged in as %s (%s) in %s guilds",
         bot.user,
-        bot.user.id,
+        bot.user.id if bot.user else "unknown",
         len(bot.guilds),
     )
 
