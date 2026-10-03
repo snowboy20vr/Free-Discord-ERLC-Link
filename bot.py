@@ -338,12 +338,25 @@ class ConfigView(discord.ui.LayoutView):
         self.add_item(discord.ui.Separator())
         self.add_item(discord.ui.TextDisplay(self.page_text()))
 
-        controls = discord.ui.ActionRow()
-        if self.page == "detection":
-            controls.add_item(DetectionActionSelect(self))
-        controls.add_item(EditButton())
-        controls.add_item(CloseButton())
-        self.add_item(controls)
+        if self.page == "permissions":
+            command_row = discord.ui.ActionRow()
+            command_row.add_item(CommandRoleSelect(self))
+            self.add_item(command_row)
+
+            admin_row = discord.ui.ActionRow()
+            admin_row.add_item(AdminRoleSelect(self))
+            self.add_item(admin_row)
+
+            controls = discord.ui.ActionRow()
+            controls.add_item(CloseButton())
+            self.add_item(controls)
+        else:
+            controls = discord.ui.ActionRow()
+            if self.page == "detection":
+                controls.add_item(DetectionActionSelect(self))
+            controls.add_item(EditButton())
+            controls.add_item(CloseButton())
+            self.add_item(controls)
 
 
 class PageButton(discord.ui.Button):
@@ -411,6 +424,42 @@ class DetectionActionSelect(discord.ui.Select):
         await interaction.response.edit_message(view=self.parent_view)
 
 
+class CommandRoleSelect(discord.ui.RoleSelect):
+    def __init__(self, parent_view: ConfigView):
+        self.parent_view = parent_view
+        super().__init__(
+            placeholder="Select the ER:LC Command Role",
+            min_values=1,
+            max_values=1,
+            custom_id="erlc_command_role",
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        role = self.values[0]
+        self.parent_view.cfg.command_role_id = role.id
+        await save_config(self.parent_view.cfg)
+        self.parent_view.rebuild()
+        await interaction.response.edit_message(view=self.parent_view)
+
+
+class AdminRoleSelect(discord.ui.RoleSelect):
+    def __init__(self, parent_view: ConfigView):
+        self.parent_view = parent_view
+        super().__init__(
+            placeholder="Select the ER:LC Admin Role",
+            min_values=1,
+            max_values=1,
+            custom_id="erlc_admin_role",
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        role = self.values[0]
+        self.parent_view.cfg.admin_role_id = role.id
+        await save_config(self.parent_view.cfg)
+        self.parent_view.rebuild()
+        await interaction.response.edit_message(view=self.parent_view)
+
+
 class EditButton(discord.ui.Button):
     def __init__(self):
         super().__init__(
@@ -423,6 +472,11 @@ class EditButton(discord.ui.Button):
         view: ConfigView = self.view
         if view.page == "overview":
             view.page = "erlc"
+            view.rebuild()
+            await interaction.response.edit_message(view=view)
+            return
+
+        if view.page == "permissions":
             view.rebuild()
             await interaction.response.edit_message(view=view)
             return
@@ -459,22 +513,6 @@ class ConfigModal(discord.ui.Modal):
                 placeholder="Paste your private server key",
             )
             self.add_item(self.key)
-
-        elif page == "permissions":
-            self.command_role = discord.ui.TextInput(
-                label="Command Role ID",
-                required=False,
-                placeholder="Discord role ID",
-                default=str(cfg.command_role_id or ""),
-            )
-            self.admin_role = discord.ui.TextInput(
-                label="Admin Role ID",
-                required=False,
-                placeholder="Discord role ID",
-                default=str(cfg.admin_role_id or ""),
-            )
-            self.add_item(self.command_role)
-            self.add_item(self.admin_role)
 
         elif page == "detection":
             self.enabled = discord.ui.TextInput(
@@ -534,18 +572,6 @@ class ConfigModal(discord.ui.Modal):
         try:
             if self.page == "erlc":
                 self.cfg.erlc_server_key = self.key.value.strip()
-
-            elif self.page == "permissions":
-                self.cfg.command_role_id = (
-                    int(self.command_role.value)
-                    if self.command_role.value.strip()
-                    else 0
-                )
-                self.cfg.admin_role_id = (
-                    int(self.admin_role.value)
-                    if self.admin_role.value.strip()
-                    else 0
-                )
 
             elif self.page == "detection":
                 self.cfg.detection_enabled = (
