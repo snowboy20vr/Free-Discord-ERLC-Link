@@ -268,6 +268,7 @@ class ConfigView(discord.ui.LayoutView):
         self.owner_id = owner_id
         self.guild_name = guild_name
         self.page = "overview"
+        self.rebuild()
 
     async def interaction_check(self, interaction):
         if interaction.user.id != self.owner_id:
@@ -831,8 +832,6 @@ async def config_command(interaction):
         interaction.user.id,
         interaction.guild.name,
     )
-
-    view.rebuild()
 
     await interaction.response.send_message(
         view=view,
