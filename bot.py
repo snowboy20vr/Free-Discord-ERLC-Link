@@ -417,8 +417,18 @@ class ConfigView(discord.ui.View):
                 value=self.cfg.prefix,
             )
             embed.add_field(
-                name="Example",
-                value=f"{self.cfg.prefix}command hint Welcome!",
+                name="Examples",
+                value=(
+                    f"{self.cfg.prefix}command hint Welcome!\\n"
+                    f"{self.cfg.prefix}command kick Player Reason\\n"
+                    f"{self.cfg.prefix}command ban Player Reason\\n"
+                    f"{self.cfg.prefix}command unban Player"
+                ),
+                inline=False,
+            )
+            embed.add_field(
+                name="Aliases",
+                value=f"{self.cfg.prefix}command or {self.cfg.prefix}cmd",
                 inline=False,
             )
 
@@ -835,6 +845,35 @@ async def config_command(interaction):
 
 
 @bot.tree.command(
+    name="help",
+    description="Show ER:LC Link commands and examples.",
+)
+async def help_command(interaction):
+    cfg = await get_config(interaction.guild.id)
+    embed = discord.Embed(
+        title="ER:LC Link • Command Guide",
+        description=(
+            f"ER:LC actions are prefix-only. Use **{cfg.prefix}command** "
+            "followed by the ER:LC command.\\n\\n"
+            f"Hint: {cfg.prefix}command hint Welcome!\\n"
+            f"Message: {cfg.prefix}command message Server restart soon!\\n"
+            f"Kick: {cfg.prefix}command kick Player Reason\\n"
+            f"Ban: {cfg.prefix}command ban Player Reason\\n"
+            f"Unban: {cfg.prefix}command unban Player\\n"
+            f"Raw: {cfg.prefix}command <erlc command> <arguments>\\n\\n"
+            "The cmd alias also works."
+        ),
+        color=discord.Color.blurple(),
+    )
+    embed.add_field(
+        name="Slash Commands",
+        value="/config • /server • /players • /help",
+        inline=False,
+    )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@bot.tree.command(
     name="server",
     description="Show ER:LC server information.",
 )
@@ -920,206 +959,9 @@ async def players_command(interaction):
         )
 
 
-@bot.tree.command(
-    name="command",
-    description="Run a permitted ER:LC server command.",
-)
-@app_commands.describe(
-    command="Example: :h Welcome to the server!",
-)
-@require_manage()
-async def command_command(interaction, command: str):
-    await interaction.response.defer(ephemeral=True)
-
-    command = command.strip()
-
-    if not command.startswith(":"):
-        command = ":" + command
-
-    try:
-        client, cfg = await bot.get_erlc(
-            interaction.guild.id
-        )
-
-        await client.command(command)
-
-        await bot.log_action(
-            cfg,
-            interaction.guild,
-            "ER:LC Command",
-            f"Staff: {interaction.user.mention}\nCommand: {command}",
-        )
-
-        await interaction.followup.send(
-            f"Executed {command}",
-            ephemeral=True,
-        )
-
-    except Exception as exc:
-        await interaction.followup.send(
-            f"Command failed: {exc}",
-            ephemeral=True,
-        )
-
-
-@bot.tree.command(
-    name="hint",
-    description="Send an ER:LC hint.",
-)
-@app_commands.describe(message="The hint text.")
-@require_manage()
-async def hint_command(interaction, message: str):
-    await command_command.callback(
-        interaction,
-        f":h {message}",
-    )
-
-
-@bot.tree.command(
-    name="message",
-    description="Send an ER:LC center message.",
-)
-@app_commands.describe(message="The message text.")
-@require_manage()
-async def message_command(interaction, message: str):
-    await command_command.callback(
-        interaction,
-        f":m {message}",
-    )
-
-
-@bot.tree.command(
-    name="kick",
-    description="Kick a player from the ER:LC server.",
-)
-@app_commands.describe(
-    username="ER:LC username",
-    reason="Reason",
-)
-@require_manage()
-async def kick_command(interaction, username: str, reason: str):
-    await interaction.response.defer(ephemeral=True)
-
-    try:
-        client, cfg = await bot.get_erlc(
-            interaction.guild.id
-        )
-
-        await client.command(
-            f":kick {username} {reason}"
-        )
-
-        await bot.log_action(
-            cfg,
-            interaction.guild,
-            "ER:LC Kick",
-            (
-                f"Target: {username}\n"
-                f"Reason: {reason}\n"
-                f"By: {interaction.user.mention}"
-            ),
-            discord.Color.orange(),
-        )
-
-        await interaction.followup.send(
-            f"Kicked {username}.",
-            ephemeral=True,
-        )
-
-    except Exception as exc:
-        await interaction.followup.send(
-            f"Kick failed: {exc}",
-            ephemeral=True,
-        )
-
-
-@bot.tree.command(
-    name="ban",
-    description="Ban a player from the ER:LC server.",
-)
-@app_commands.describe(
-    username="ER:LC username",
-    reason="Reason",
-)
-@require_manage()
-async def ban_command(interaction, username: str, reason: str):
-    await interaction.response.defer(ephemeral=True)
-
-    try:
-        client, cfg = await bot.get_erlc(
-            interaction.guild.id
-        )
-
-        await client.command(
-            f":ban {username} {reason}"
-        )
-
-        await bot.log_action(
-            cfg,
-            interaction.guild,
-            "ER:LC Ban",
-            (
-                f"Target: {username}\n"
-                f"Reason: {reason}\n"
-                f"By: {interaction.user.mention}"
-            ),
-            discord.Color.red(),
-        )
-
-        await interaction.followup.send(
-            f"Banned {username}.",
-            ephemeral=True,
-        )
-
-    except Exception as exc:
-        await interaction.followup.send(
-            f"Ban failed: {exc}",
-            ephemeral=True,
-        )
-
-
-@bot.tree.command(
-    name="unban",
-    description="Unban a player from the ER:LC server.",
-)
-@app_commands.describe(
-    username="ER:LC username",
-)
-@require_manage()
-async def unban_command(interaction, username: str):
-    await interaction.response.defer(ephemeral=True)
-
-    try:
-        client, cfg = await bot.get_erlc(
-            interaction.guild.id
-        )
-
-        await client.command(
-            f":unban {username}"
-        )
-
-        await bot.log_action(
-            cfg,
-            interaction.guild,
-            "ER:LC Unban",
-            (
-                f"Target: {username}\n"
-                f"By: {interaction.user.mention}"
-            ),
-            discord.Color.green(),
-        )
-
-        await interaction.followup.send(
-            f"Unbanned {username}.",
-            ephemeral=True,
-        )
-
-    except Exception as exc:
-        await interaction.followup.send(
-            f"Unban failed: {exc}",
-            ephemeral=True,
-        )
-
+# ER:LC action commands are intentionally prefix-only.
+# Use: !command <erlc-command> <arguments>
+# Examples: !command hint Welcome! / !command kick Player Reason
 
 async def process_prefix(message):
     if not message.guild or message.author.bot:
@@ -1131,7 +973,6 @@ async def process_prefix(message):
         return
 
     raw = message.content[len(cfg.prefix):].strip()
-
     if not raw:
         return
 
@@ -1144,8 +985,7 @@ async def process_prefix(message):
         return
 
     command_name = parts.pop(0).lower()
-
-    if command_name != "command":
+    if command_name not in {"command", "cmd"}:
         return
 
     if not isinstance(message.author, discord.Member):
@@ -1160,12 +1000,33 @@ async def process_prefix(message):
 
     if not parts:
         await message.reply(
-            f"Usage: {cfg.prefix}command <command> <text>",
-            delete_after=7,
+            f"Usage: {cfg.prefix}command <command> <text>\\n"
+            f"Examples: {cfg.prefix}command hint Hello! | "
+            f"{cfg.prefix}command kick Player Reason",
+            delete_after=10,
         )
         return
 
-    erlc_command = parts.pop(0)
+    erlc_command = parts.pop(0).lower()
+
+    aliases = {
+        "hint": "h",
+        "message": "m",
+        "msg": "m",
+        "kick": "kick",
+        "ban": "ban",
+        "unban": "unban",
+        "warn": "warn",
+        "kill": "kill",
+        "respawn": "respawn",
+        "refresh": "refresh",
+        "heal": "heal",
+        "mod": "mod",
+        "admin": "admin",
+        "team": "team",
+        "tp": "tp",
+    }
+    erlc_command = aliases.get(erlc_command, erlc_command)
 
     if not erlc_command.startswith(":"):
         erlc_command = ":" + erlc_command
@@ -1174,15 +1035,12 @@ async def process_prefix(message):
     full_command = f"{erlc_command} {rest}".strip()
 
     try:
-        client, _ = await bot.get_erlc(
-            message.guild.id
-        )
-
+        client, _ = await bot.get_erlc(message.guild.id)
         await client.command(full_command)
 
         try:
             await message.delete()
-        except discord.Forbidden:
+        except (discord.Forbidden, discord.NotFound):
             pass
 
         await bot.log_action(
@@ -1190,7 +1048,7 @@ async def process_prefix(message):
             message.guild,
             "ER:LC Prefix Command",
             (
-                f"Staff: {message.author.mention}\n"
+                f"Staff: {message.author.mention}\\n"
                 f"Command: {full_command}"
             ),
         )
