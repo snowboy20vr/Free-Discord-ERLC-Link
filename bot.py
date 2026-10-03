@@ -632,9 +632,9 @@ class ConfigModal(discord.ui.Modal):
 
                 action = self.action.value.strip().lower()
 
-                if action not in {"log", "kick", "ban"}:
+                if action not in {"log", "log kick", "log ban"}:
                     raise ValueError(
-                        "Action must be log, kick, or ban."
+                        "Action must be log, log kick, or log ban."
                     )
 
                 self.cfg.detection_action = action
@@ -1271,10 +1271,11 @@ async def detection_loop():
                     f"{live_distance:.1f} studs."
                 )
 
+                action = cfg.detection_action
+
                 color = (
                     discord.Color.red()
-                    if cfg.detection_action
-                    in {"kick", "ban"}
+                    if action in {"log kick", "log ban"}
                     else discord.Color.orange()
                 )
 
@@ -1284,19 +1285,22 @@ async def detection_loop():
                     "ER:LC Cheater Detection",
                     (
                         f"Player: {killer_name}\n"
-                        f"Configured action: "
-                        f"{cfg.detection_action}\n"
+                        f"Configured action: {action}\n"
                         f"Details: {reason}"
                     ),
                     color,
                 )
 
-                if cfg.detection_action in {
-                    "kick",
-                    "ban",
-                }:
+                punishment_action = None
+
+                if action == "log kick":
+                    punishment_action = "kick"
+                elif action == "log ban":
+                    punishment_action = "ban"
+
+                if punishment_action:
                     punishment = (
-                        f":{cfg.detection_action} "
+                        f":{punishment_action} "
                         f"{killer_name} {reason}"
                     )
 
