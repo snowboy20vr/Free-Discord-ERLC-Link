@@ -18,6 +18,16 @@ A clean Discord to ER:LC private-server management bot built with Python and dis
 - SQLite configuration storage
 - Secrets excluded from Git
 
+## Extra quality-of-life features
+
+- One private `/config` panel with ER:LC, permissions, detection, logs, and misc settings.
+- Configurable command/admin roles.
+- Discord audit logging for ER:LC actions.
+- Optional Melonly webhook forwarding.
+- Prefix trigger messages are automatically deleted after successful commands when the bot has permission.
+- Common ER:LC command aliases such as `hint` → `h` and `message` → `m`.
+- `cmd` works as a shorter alias for the configured prefix command.
+
 ## Detection
 
 Default detector:
