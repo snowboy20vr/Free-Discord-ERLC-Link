@@ -699,7 +699,7 @@ class ERLCBot(commands.Bot):
         self.http_session = aiohttp.ClientSession()
         self.melonly = MelonlyLogger(self.http_session)
 
-        self.detection_loop.start()
+        detection_loop.start()
 
         server_id = os.getenv("SERVER_ID", "").strip()
 
@@ -726,7 +726,7 @@ class ERLCBot(commands.Bot):
             log.info("Synced global slash commands")
 
     async def close(self):
-        self.detection_loop.cancel()
+        detection_loop.cancel()
 
         if self.http_session:
             await self.http_session.close()
