@@ -25,7 +25,7 @@ logging.basicConfig(
 log = logging.getLogger("erlc-link")
 
 DB_PATH = os.getenv("DATABASE_PATH", "data/erlc_link.db")
-ERLC_BASE = "https://api.policeroleplay.community/v2"
+ERLC_BASE = "https://api.erlc.gg/v2"
 
 
 @dataclass
@@ -203,22 +203,33 @@ def player_id(player: dict):
         "roblox_id",
     )
 
+    # ER:LC API v2 represents the player as "Username:RobloxId".
+    if value is None:
+        player_value = player_field(player, "Player", "player")
+        if isinstance(player_value, str) and ":" in player_value:
+            value = player_value.rsplit(":", 1)[1]
+
     try:
         return int(value)
     except (TypeError, ValueError):
         return None
 
 
+def normalize_player_name(value):
+    # Kill logs also use the "Username:RobloxId" format.
+    name = str(value or "Unknown")
+    return name.rsplit(":", 1)[0] if ":" in name else name
+
+
 def player_name(player: dict):
-    return str(
-        player_field(
-            player,
-            "Player",
-            "Username",
-            "username",
-            default="Unknown",
-        )
+    value = player_field(
+        player,
+        "Player",
+        "Username",
+        "username",
+        default="Unknown",
     )
+    return normalize_player_name(value)
 
 
 def player_position(player: dict):
@@ -231,8 +242,9 @@ def player_position(player: dict):
     )
 
     if isinstance(pos, dict):
-        x = pos.get("x", pos.get("X"))
-        z = pos.get("z", pos.get("Z"))
+        # ER:LC API v2 uses LocationX and LocationZ.
+        x = pos.get("LocationX", pos.get("x", pos.get("X")))
+        z = pos.get("LocationZ", pos.get("z", pos.get("Z")))
 
         if x is not None and z is not None:
             try:
@@ -1168,11 +1180,14 @@ async def detection_loop():
                 killer_id = None
                 victim_id = None
 
+                normalized_killer = normalize_player_name(killer_name).lower()
+                normalized_victim = normalize_player_name(victim_name).lower()
+
                 for pid, name in names.items():
-                    if name.lower() == killer_name.lower():
+                    if name.lower() == normalized_killer:
                         killer_id = pid
 
-                    if name.lower() == victim_name.lower():
+                    if name.lower() == normalized_victim:
                         victim_id = pid
 
                 key = killer_name.lower()
