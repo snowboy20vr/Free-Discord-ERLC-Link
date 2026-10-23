@@ -141,7 +141,7 @@ class ERLCClient:
         return await self.request(
             "POST",
             "/server/command",
-            json={"Command": command},
+            json={"command": command},
         )
 
 
