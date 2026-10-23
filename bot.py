@@ -1365,14 +1365,6 @@ async def on_ready():
 
         bot._commands_synced = True
 
-    await bot.change_presence(
-        status=discord.Status.online,
-        activity=discord.Activity(
-            type=discord.ActivityType.watching,
-            name=f"ER:LC Link • {len(bot.guilds)} server{'s' if len(bot.guilds) != 1 else ''}",
-        ),
-    )
-
     log.info(
         "Logged in as %s (%s) in %s guilds",
         bot.user,
