@@ -3,6 +3,7 @@ import json
 import logging
 import math
 import os
+import re
 import shlex
 import time
 from collections import defaultdict, deque
@@ -44,6 +45,7 @@ class GuildConfig:
     detection_window: float = 5.0
     detection_action: str = "log"
     detection_cooldown: float = 60.0
+    beta_enabled: bool = False
 
 
 async def init_db():
@@ -136,6 +138,29 @@ class ERLCClient:
     async def kill_logs(self):
         data = await self.request("GET", "/server?KillLogs=true")
         return data.get("KillLogs", [])
+
+    async def command_logs(self):
+        data = await self.request("GET", "/server?CommandLogs=true")
+        return data.get("CommandLogs", []) if isinstance(data, dict) else data
+
+    async def bans(self):
+        if not self.server_key:
+            raise RuntimeError("ER:LC server key is not configured.")
+        url = "https://api.erlc.gg/v1/server/bans"
+        async with self.session.get(
+            url,
+            headers=self.headers,
+            timeout=aiohttp.ClientTimeout(total=15),
+        ) as response:
+            body = await response.text()
+            if response.status >= 400:
+                raise RuntimeError(f"ER:LC bans API returned HTTP {response.status}: {body[:300]}")
+            if not body:
+                return {}
+            try:
+                return json.loads(body)
+            except json.JSONDecodeError:
+                raise RuntimeError("ER:LC bans API returned invalid JSON.")
 
     async def command(self, command: str):
         return await self.request(
@@ -310,10 +335,19 @@ class ConfigView(discord.ui.LayoutView):
             return (f"## Logs\n**Discord Log Channel:** {f"<#{self.cfg.log_channel_id}>" if self.cfg.log_channel_id else "Not configured"}\n"
                     f"**Melonly API Token:** {'Configured' if self.cfg.melonly_api_token else 'Not configured'}\n"
                     f"**Melonly Webhook:** {'Configured' if self.cfg.melonly_webhook_url else 'Not configured'}")
-        return (f"## Miscellaneous\n**Prefix:** `{self.cfg.prefix}`\n**Aliases:** `{self.cfg.prefix}command` or `{self.cfg.prefix}cmd`\n\n"
-                f"**Examples**\n`{self.cfg.prefix}command hint Welcome!`\n`{self.cfg.prefix}command kick Player Reason`\n"
-                f"`{self.cfg.prefix}command ban Player Reason`\n`{self.cfg.prefix}command unban Player`")
-
+        if self.page == "beta":
+            return (
+                "## Beta Features\n"
+                f"**Beta Features:** {'ENABLED' if self.cfg.beta_enabled else 'DISABLED'}\n\n"
+                "Beta features may be incomplete or behave unexpectedly. Enable them only if you understand the risks.\n\n"
+                "Mass Unban adds /runmassunban, which can unban every currently banned player. "
+                "It supports All, Logged (a ban command with a reason is present in ER:LC command logs), "
+                "and Not Logged modes. ER:LC logs are limited, so older bans may not appear in them.\n\n"
+                "Melonly incoming logs cannot be read back by this bot; log filtering uses ER:LC command logs instead."
+            )
+        return (f"## Miscellaneous\n**Prefix:** \`{self.cfg.prefix}\`\n**Aliases:** \`{self.cfg.prefix}command\` or \`{self.cfg.prefix}cmd\`\n\n"
+                f"**Examples**\n\`{self.cfg.prefix}command hint Welcome!\`\n\`{self.cfg.prefix}command kick Player Reason\`\n"
+                f"\`{self.cfg.prefix}command ban Player Reason\`\n\`{self.cfg.prefix}command unban Player\`)
     def rebuild(self):
         self.clear_items()
 
@@ -346,12 +380,18 @@ class ConfigView(discord.ui.LayoutView):
 
         misc_row = discord.ui.ActionRow()
         misc_row.add_item(PageButton("Misc", "misc", self.page == "misc", "⚙️"))
+        misc_row.add_item(PageButton("Beta", "beta", self.page == "beta", "🧪"))
         self.add_item(misc_row)
 
         self.add_item(discord.ui.Separator())
         self.add_item(discord.ui.TextDisplay(self.page_text()))
 
-        if self.page == "permissions":
+        if self.page == "beta":
+            controls = discord.ui.ActionRow()
+            controls.add_item(BetaToggleButton(self.cfg.beta_enabled))
+            controls.add_item(CloseButton())
+            self.add_item(controls)
+        elif self.page == "permissions":
             command_row = discord.ui.ActionRow()
             command_row.add_item(CommandRoleSelect(self))
             self.add_item(command_row)
@@ -499,6 +539,28 @@ class EditButton(discord.ui.Button):
 
         modal = ConfigModal(view.cfg, view.page, view)
         await interaction.response.send_modal(modal)
+
+
+class BetaToggleButton(discord.ui.Button):
+    def __init__(self, enabled: bool):
+        super().__init__(
+            label="Disable Beta Features" if enabled else "Enable Beta Features",
+            style=discord.ButtonStyle.danger if enabled else discord.ButtonStyle.success,
+            custom_id="cfg_beta_toggle",
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        view: ConfigView = self.view
+        view.cfg.beta_enabled = not view.cfg.beta_enabled
+        await save_config(view.cfg)
+        view.rebuild()
+        await interaction.response.edit_message(view=view)
+        if view.cfg.beta_enabled:
+            await interaction.followup.send(
+                "WARNING: Beta features are enabled and may be unstable. "
+                "Use /runmassunban carefully: it can remove every ban from your ER:LC server.",
+                ephemeral=True,
+            )
 
 
 class CloseButton(discord.ui.Button):
@@ -828,6 +890,153 @@ def require_config():
         return True
 
     return app_commands.check(predicate)
+
+
+def normalize_ban_entries(data):
+    """Return current ban-list entries as (player_id, username) pairs."""
+    if isinstance(data, dict):
+        for key in ("Bans", "bans", "BanList", "banList"):
+            if key in data and isinstance(data[key], (dict, list)):
+                data = data[key]
+                break
+    entries = []
+    if isinstance(data, dict):
+        for player_id_value, username_value in data.items():
+            if isinstance(username_value, dict):
+                pid = username_value.get("UserId", username_value.get("userId", player_id_value))
+                name = username_value.get("Player", username_value.get("Username", username_value.get("username", str(player_id_value))))
+            else:
+                pid, name = player_id_value, username_value
+            entries.append((str(pid).strip(), str(name or pid).strip()))
+    elif isinstance(data, list):
+        for item in data:
+            if isinstance(item, dict):
+                pid = item.get("UserId", item.get("userId", item.get("RobloxId", item.get("Id", item.get("id")))))
+                name = item.get("Player", item.get("Username", item.get("username", pid)))
+                if pid is not None:
+                    entries.append((str(pid).strip(), str(name or pid).strip()))
+    return [(pid, name) for pid, name in entries if pid]
+
+
+def logged_ban_ids(command_logs, bans):
+    """Find bans with a matching command-log entry containing a reason."""
+    ban_lookup = {}
+    for player_id_value, username in bans:
+        ban_lookup[player_id_value.lower()] = player_id_value
+        ban_lookup[username.lower()] = player_id_value
+    found = set()
+    for entry in command_logs if isinstance(command_logs, list) else []:
+        if isinstance(entry, dict):
+            command_text = " ".join(
+                str(value) for key, value in entry.items()
+                if isinstance(value, (str, int, float))
+                and str(key).lower() in {
+                    "command", "cmd", "text", "message", "details", "reason",
+                    "player", "target", "arguments", "args"
+                }
+            )
+        else:
+            command_text = str(entry)
+        match = re.search(r"(?:^|\s):?ban\s+([^\s]+)\s+(.+)$", command_text, re.IGNORECASE)
+        if not match or not match.group(2).strip():
+            continue
+        player_id_value = ban_lookup.get(match.group(1).strip().lower())
+        if player_id_value:
+            found.add(player_id_value)
+    return found
+
+
+@bot.tree.command(
+    name="runmassunban",
+    description="Beta: mass-unban ER:LC players (requires Beta Features enabled).",
+)
+@app_commands.choices(mode=[
+    app_commands.Choice(name="All bans", value="all"),
+    app_commands.Choice(name="Logged bans with a reason", value="logged"),
+    app_commands.Choice(name="Bans without a matching logged reason", value="not_logged"),
+])
+@require_manage()
+async def runmassunban_command(interaction: discord.Interaction, mode: app_commands.Choice[str]):
+    if interaction.guild is None:
+        await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+        return
+    cfg = await get_config(interaction.guild.id)
+    if not cfg.beta_enabled:
+        await interaction.response.send_message(
+            "/runmassunban is a beta command and is disabled. Enable it in /config > Beta first.",
+            ephemeral=True,
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    try:
+        client, _ = await bot.get_erlc(interaction.guild.id)
+        bans = normalize_ban_entries(await client.bans())
+        if not bans:
+            await interaction.followup.send("No current ER:LC bans were returned by the API.", ephemeral=True)
+            return
+
+        warning = ""
+        if mode.value == "all":
+            selected = bans
+        else:
+            try:
+                logs = await client.command_logs()
+                logged_ids = logged_ban_ids(logs, bans)
+                if mode.value == "logged":
+                    selected = [entry for entry in bans if entry[0] in logged_ids]
+                else:
+                    selected = [entry for entry in bans if entry[0] not in logged_ids]
+            except Exception as log_error:
+                log.warning("Could not read ER:LC command logs; falling back to all bans: %s", log_error)
+                selected = bans
+                warning = "WARNING: ER:LC command logs could not be read, so this run fell back to ALL bans.\n"
+
+        if not selected:
+            await interaction.followup.send(
+                warning + "No bans matched that mode. No unban commands were sent.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.followup.send(
+            warning + f"Starting mass unban: {len(selected)} of {len(bans)} current bans (mode: {mode.value}). This may take time.",
+            ephemeral=True,
+        )
+        succeeded = 0
+        failed = []
+        for index, (player_id_value, username) in enumerate(selected, start=1):
+            try:
+                await client.command(f":unban {player_id_value}")
+                succeeded += 1
+            except Exception as exc:
+                failed.append(f"{username} ({player_id_value}): {str(exc)[:120]}")
+                log.warning("Mass unban failed for %s (%s): %s", username, player_id_value, exc)
+            if index < len(selected):
+                await asyncio.sleep(1.0)
+            if index % 10 == 0:
+                try:
+                    await interaction.edit_original_response(
+                        content=warning + f"Mass unban in progress: {succeeded}/{len(selected)} sent; {len(failed)} failed."
+                    )
+                except (discord.HTTPException, discord.NotFound):
+                    pass
+
+        summary = (
+            warning + "Mass unban finished.\n"
+            f"Mode: {mode.value}\n"
+            f"Selected: {len(selected)}\n"
+            f"Commands accepted: {succeeded}\n"
+            f"Failed: {len(failed)}"
+        )
+        if failed:
+            summary += "\n\nFirst failures:\n" + "\n".join(f"- {line}" for line in failed[:8])
+        await interaction.edit_original_response(content=summary[:1900])
+    except Exception as exc:
+        await interaction.followup.send(
+            f"Mass unban failed: {str(exc)[:1500]}",
+            ephemeral=True,
+        )
 
 
 @bot.tree.command(
