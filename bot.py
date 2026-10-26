@@ -327,14 +327,19 @@ class ConfigView(discord.ui.LayoutView):
             admin_role = f"<@&{self.cfg.admin_role_id}>" if self.cfg.admin_role_id else "Administrator only"
             return f"## Permissions\n**Command Role:** {command_role}\n**Admin Role:** {admin_role}\n\nDiscord Administrators always have access. The configured command role can run ER:LC commands."
         if self.page == "detection":
-            return (f"## Anti-Cheat Detection\n**Enabled:** {'Yes' if self.cfg.detection_enabled else 'No'}\n"
-                    f"**Distance:** {self.cfg.detection_distance:.0f} studs\n**Kills:** {self.cfg.detection_kills}\n"
-                    f"**Window:** {self.cfg.detection_window:g}s\n**Action:** {self.cfg.detection_action.upper()}\n"
-                    f"**Cooldown:** {self.cfg.detection_cooldown:g}s")
+            return (
+                f"## Anti-Cheat Detection\n**Enabled:** {'Yes' if self.cfg.detection_enabled else 'No'}\n"
+                f"**Distance:** {self.cfg.detection_distance:.0f} studs\n**Kills:** {self.cfg.detection_kills}\n"
+                f"**Window:** {self.cfg.detection_window:g}s\n**Action:** {self.cfg.detection_action.upper()}\n"
+                f"**Cooldown:** {self.cfg.detection_cooldown:g}s"
+            )
         if self.page == "logs":
-            return (f"## Logs\n**Discord Log Channel:** {f"<#{self.cfg.log_channel_id}>" if self.cfg.log_channel_id else "Not configured"}\n"
-                    f"**Melonly API Token:** {'Configured' if self.cfg.melonly_api_token else 'Not configured'}\n"
-                    f"**Melonly Webhook:** {'Configured' if self.cfg.melonly_webhook_url else 'Not configured'}")
+            log_channel = f"<#{self.cfg.log_channel_id}>" if self.cfg.log_channel_id else "Not configured"
+            return (
+                f"## Logs\n**Discord Log Channel:** {log_channel}\n"
+                f"**Melonly API Token:** {'Configured' if self.cfg.melonly_api_token else 'Not configured'}\n"
+                f"**Melonly Webhook:** {'Configured' if self.cfg.melonly_webhook_url else 'Not configured'}"
+            )
         if self.page == "beta":
             return (
                 "## Beta Features\n"
@@ -345,9 +350,15 @@ class ConfigView(discord.ui.LayoutView):
                 "and Not Logged modes. ER:LC logs are limited, so older bans may not appear in them.\n\n"
                 "Melonly incoming logs cannot be read back by this bot; log filtering uses ER:LC command logs instead."
             )
-        return (f"## Miscellaneous\n**Prefix:** \`{self.cfg.prefix}\`\n**Aliases:** \`{self.cfg.prefix}command\` or \`{self.cfg.prefix}cmd\`\n\n"
-                f"**Examples**\n\`{self.cfg.prefix}command hint Welcome!\`\n\`{self.cfg.prefix}command kick Player Reason\`\n"
-                f"\`{self.cfg.prefix}command ban Player Reason\`\n\`{self.cfg.prefix}command unban Player\`)
+        return (
+            f"## Miscellaneous\nPrefix: {self.cfg.prefix}\n"
+            f"Aliases: {self.cfg.prefix}command or {self.cfg.prefix}cmd\n\n"
+            f"Examples\n{self.cfg.prefix}command hint Welcome!\n"
+            f"{self.cfg.prefix}command kick Player Reason\n"
+            f"{self.cfg.prefix}command ban Player Reason\n"
+            f"{self.cfg.prefix}command unban Player"
+        )
+
     def rebuild(self):
         self.clear_items()
 
