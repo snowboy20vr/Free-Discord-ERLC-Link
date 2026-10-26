@@ -81,7 +81,7 @@ When enabled, `/runmassunban` is available to members who can run ER:LC commands
 
 ER:LC command-log history is limited, so older bans may not have a matching log even if they were originally issued with a reason. The bot cannot read entries back from a Melonly incoming webhook; filtered modes use ER:LC command logs. If ER:LC command logs cannot be fetched, filtered modes fall back to **All bans** and the response warns you.
 
-Mass unban sends one ER:LC `:unban` command per current ban and reports accepted commands and failures. Use it carefully.
+Mass unban sends one ER:LC `:unban` command per current ban, waits five seconds between commands to respect ER:LC command pacing, and reports accepted commands and failures. Large ban lists can take a long time. Use it carefully.
 
 ## Prefix commands
 
