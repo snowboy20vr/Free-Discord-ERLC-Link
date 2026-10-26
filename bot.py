@@ -935,27 +935,36 @@ def logged_ban_ids(command_logs, bans):
     for player_id_value, username in bans:
         ban_lookup[player_id_value.lower()] = player_id_value
         ban_lookup[username.lower()] = player_id_value
+
     found = set()
     for entry in command_logs if isinstance(command_logs, list) else []:
         if isinstance(entry, dict):
-            command_text = " ".join(
-                str(value) for key, value in entry.items()
-                if isinstance(value, (str, int, float))
-                and str(key).lower() in {
-                    "command", "cmd", "text", "message", "details", "reason",
-                    "player", "target", "arguments", "args"
-                }
-            )
+            command_value = entry.get("Command", entry.get("command", entry.get("Cmd", entry.get("cmd", ""))))
+            player_value = entry.get("Player", entry.get("player", entry.get("Target", entry.get("target", ""))))
+            reason_value = entry.get("Reason", entry.get("reason", entry.get("Arguments", entry.get("arguments", ""))))
+            command_text = str(command_value or "").strip()
+            if re.fullmatch(r":?ban", command_text, re.IGNORECASE):
+                command_text = f"ban {player_value} {reason_value}".strip()
+            elif not command_text:
+                command_text = " ".join(
+                    str(value) for value in entry.values()
+                    if isinstance(value, (str, int, float))
+                )
         else:
             command_text = str(entry)
+
         match = re.search(r"(?:^|\s):?ban\s+([^\s]+)\s+(.+)$", command_text, re.IGNORECASE)
         if not match or not match.group(2).strip():
             continue
-        player_id_value = ban_lookup.get(match.group(1).strip().lower())
+
+        target = match.group(1).strip().lower()
+        player_id_value = ban_lookup.get(target)
+        if not player_id_value and ":" in target:
+            name_part, id_part = target.rsplit(":", 1)
+            player_id_value = ban_lookup.get(id_part) or ban_lookup.get(name_part)
         if player_id_value:
             found.add(player_id_value)
     return found
-
 
 @bot.tree.command(
     name="runmassunban",
@@ -1024,7 +1033,7 @@ async def runmassunban_command(interaction: discord.Interaction, mode: app_comma
                 failed.append(f"{username} ({player_id_value}): {str(exc)[:120]}")
                 log.warning("Mass unban failed for %s (%s): %s", username, player_id_value, exc)
             if index < len(selected):
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(5.0)
             if index % 10 == 0:
                 try:
                     await interaction.edit_original_response(
