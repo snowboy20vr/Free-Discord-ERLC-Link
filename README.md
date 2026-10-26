@@ -70,6 +70,19 @@ Melonly logging is intentionally limited to kick and ban events actually issued 
 ### Misc
 Configure the prefix.
 
+### Beta
+Beta features are disabled by default. Open `/config` → **Beta** to enable or disable them. Beta features may be unstable.
+
+When enabled, `/runmassunban` is available to members who can run ER:LC commands. It supports:
+
+- **All bans** — unban every player in the current ER:LC ban list.
+- **Logged bans with a reason** — only unban players matched to a ban command with a reason in the available ER:LC command logs.
+- **Bans without a matching logged reason** — unban entries without a matching logged reason.
+
+ER:LC command-log history is limited, so older bans may not have a matching log even if they were originally issued with a reason. The bot cannot read entries back from a Melonly incoming webhook; filtered modes use ER:LC command logs. If ER:LC command logs cannot be fetched, filtered modes fall back to **All bans** and the response warns you.
+
+Mass unban sends one ER:LC `:unban` command per current ban and reports accepted commands and failures. Use it carefully.
+
 ## Prefix commands
 
 ER:LC actions are intentionally prefix-only.
@@ -113,6 +126,7 @@ Normal ER:LC commands such as hint, message, unban, team, tp, etc. are not sent 
 | `/server` | Show ER:LC server information |
 | `/players` | Show current ER:LC players |
 | `/help` | Show the command guide |
+| `/runmassunban` | Beta mass unban (requires Beta enabled in `/config`) |
 
 ## Anti-cheat
 
